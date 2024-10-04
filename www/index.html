@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STT</title>
+    <style>
+        th, td {
+            padding: 0;
+            margin:0;
+            border: 1px solid white;
+            text-wrap: nowrap;
+            height: 32px;
+        }
+        #table > tr:first-of-type > td {
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+        table {
+            border-spacing: 0;
+            border-collapse: collapse;
+        }
+        .action{
+            position: absolute;
+            height: 2px;
+            background-color: red;
+            transform-origin: left;
+            /* transform: rotate(1.4rad); */
+        }
+        .action::after {
+            content: '';
+            position: absolute;
+            right: -1px;
+            top: -4px;
+            border-top: 5px solid transparent;
+            border-bottom: 5px solid transparent;
+            border-left: 10px solid red;
+        }
+    </style>
+</head>
+<body>
+    <h1>STT</h1>
+    <script type="module">
+        import {parse, run} from '/main.js';
+        function log(message) {
+            document.body.insertAdjacentHTML('beforeend', `<p>${message}</p>`);
+        }
+        window.onerror = e => {
+            log(JSON.stringify(e))
+        }
+        const tree = parse(`
+        (define 
+            [
+                (: EC/決済方法 
+                    | NULL
+                    | 代引き
+                    | カード
+                    | コンビニ前払)
+                (: EC/受注ステータス 
+                    | NULL
+                    | 受注
+                    | 出荷指示済
+                    | 出荷済
+                    | 着荷済
+                    | 計上済
+                    | キャンセル) 
+                (: EC/決済ステータス
+                    = NULL
+                    | 処理中
+                    | 未決済
+                    | 決済完了
+                    | 決済失敗
+                    | キャンセル)
+                (: OMS
+                    = NULL
+                    | 受注
+                    | 決済確認中
+                    | 出荷指示済
+                    | 出荷済
+                    | 着荷済
+                    | キャンセル) 
+                (: WMS
+                    = NULL
+                    | 未引当
+                    | 引当中
+                    | 引当済
+                    | 出荷済
+                    | キャンセル)
+            ]
+            ($ 受注 
+                [NULL NULL NULL NULL NULL]
+                [代引き 受注 未決済 _ _] 
+                This is a comment.)
+            ($ 受注 
+                [NULL NULL NULL NULL NULL] 
+                [カード 受注 処理中 _ _])
+            ($ 受注 
+                [NULL NULL NULL NULL NULL] 
+                [コンビニ前払 受注 未決済 _ _])
+            ($ 連携 
+                [* 受注 * NULL NULL] 
+                [_ _ _ 受注 NULL])
+            ($ 出荷指示
+                [代引き 受注 未決済 受注 NULL] 
+                [_ _ _ _ 未引当])
+        )`);
+        const [doms] = run(tree);
+        function render(parent, doms) {
+            for (const [tag, attr, children] of doms) {
+                const el = document.createElement(tag);
+                if (attr != null) {
+                    for (const [key, value] of Object.entries(attr)) {
+                        el.setAttribute(key, value);
+                    }
+                }
+                if (Array.isArray(children)) {
+                    render(el, children)
+                }
+                else {
+                    el.textContent = children;
+                }
+                parent.appendChild(el);
+            }
+        }
+        render(document.body, doms);
+
+        (function(){
+            for (const div of document.querySelectorAll('.action'))
+            {
+                const f = document.querySelector(`[data-state="${div.dataset.from}"]`);
+                const t = document.querySelector(`[data-state="${div.dataset.to}"]`);
+                const fr = f.getBoundingClientRect();
+                const tr = t.getBoundingClientRect();
+                const fx = fr.left + fr.width / 2;
+                const fy = fr.top + fr.height / 2;
+                const tx = tr.left + tr.width / 2;
+                const ty = tr.top + tr.height / 2;
+                const dx = tx - fx;
+                const dy = ty - fy;
+                const d = Math.sqrt(Math.pow(dx, 2) + Math.pow(dy, 2));
+                const th = Math.atan2(dy, dx);
+                div.style.width = d + 'px';
+                div.style.transform = `rotate(${th}rad)`;
+                div.style.left = fx + 'px';
+                div.style.top = fy + 'px';
+            }
+        }())
+    </script>
+</body>
+</html>
