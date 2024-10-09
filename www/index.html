@@ -4,40 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>STT</title>
-    <style>
-        th, td {
-            padding: 0;
-            margin:0;
-            border: 1px solid white;
-            text-wrap: nowrap;
-            height: 32px;
-        }
-        #table > tr:first-of-type > td {
-            border: none;
-            padding: 0;
-            margin: 0;
-        }
-        table {
-            border-spacing: 0;
-            border-collapse: collapse;
-        }
-        .action{
-            position: absolute;
-            height: 2px;
-            background-color: red;
-            transform-origin: left;
-            /* transform: rotate(1.4rad); */
-        }
-        .action::after {
-            content: '';
-            position: absolute;
-            right: -1px;
-            top: -4px;
-            border-top: 5px solid transparent;
-            border-bottom: 5px solid transparent;
-            border-left: 10px solid red;
-        }
-    </style>
+    <link rel="stylesheet" href="./main.css">
 </head>
 <body>
     <h1>STT</h1>
@@ -144,6 +111,26 @@
                 div.style.transform = `rotate(${th}rad)`;
                 div.style.left = fx + 'px';
                 div.style.top = fy + 'px';
+            }
+
+            for (const el of document.querySelectorAll('[data-state]'))
+            {
+                el.addEventListener('pointerenter', function() {
+                    for (const act of document.querySelectorAll(`[data-from="${this.dataset.state}"]`)){
+                        act.classList.add('--active');
+                        for (const t of document.querySelectorAll(`[data-state="${act.dataset.to}"]`)) {
+                            t.classList.add('--attention');
+                        }
+                    }
+                })
+                el.addEventListener('pointerleave', function() {
+                    for (const act of document.querySelectorAll(`[data-from="${this.dataset.state}"]`)){
+                        act.classList.remove('--active');
+                        for (const t of document.querySelectorAll(`[data-state="${act.dataset.to}"]`)) {
+                            t.classList.remove('--attention');
+                        }
+                    }
+                })
             }
         }())
     </script>

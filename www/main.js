@@ -1,31 +1,3 @@
-/**
-(define
-    '(
-        (: EC/PaymentMethod = NULL | Cash | Bank | Token)
-        (: EC/OrderStatus NULL R S D A B C)
-        (: WMS NULL Ready Picking Packed Left)
-    )
-    ($ action1 '(i j k) '(i j k))
-    ...
-)
- */
-
-const input = [
-    ["define", 
-        ["list", 
-            [":","EC/決済方法","NULL","代引き","カード","コンビニ前払"], 
-            [":","EC/受注ステータス","NULL","受注","出荷指示済","出荷済","着荷済","計上済","キャンセル"], 
-            [":","EC/決済ステータス","NULL","処理中","未決済","決済完了","決済失敗","キャンセル"],
-            [":","OMS","NULL","受注","決済確認中","出荷指示済","出荷済","着荷済","キャンセル"], 
-            [":","WMS","NULL","未引当","引当中","引当済","出荷済","キャンセル"],
-        ],
-        ["$", "受注", 
-            ["list", "NULL", "NULL", "NULL", "NULL", "NULL"],
-            ["list", "代引き","受注","未決済","_","_"]
-        ],
-    ],
-];
-
 const methods = {
     define,
     list,
@@ -182,7 +154,7 @@ function render(type, actions) {
     t1.push(['tr', null, [
         ['td', { 
             colspan: Math.max(xsv[0].length, 1),
-        }, '---']
+        }, '']
     ]])
     rows.forEach(row => {
         const children = row.map(cell => ['td', {'data-state':`(${cell.join()})`},

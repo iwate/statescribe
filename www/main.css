@@ -1,0 +1,69 @@
+:root {
+    --background-color: white;
+    --text-primary-color: black;
+    --border-color: black;
+}
+@media (prefers-color-scheme: dark) {
+    :root {
+        --background-color: #121212;
+        --text-primary-color: #e0e0e0;
+        --border-color: #e0e0e0;
+    }
+}
+html {
+    background-color: var(--background-color);
+    color: var(--text-primary-color);
+    font-family: "Helvetica Neue", "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, Arial, sans-serif;;
+}
+th, td {
+    padding: 0 0.5rem;
+    margin:0;
+    border: 1px solid var(--border-color);
+    text-wrap: nowrap;
+    height: 32px;
+}
+td:has(table) {
+    padding: 0;
+}
+#table > tr:first-of-type > td {
+    border: none;
+    padding: 0;
+    margin: 0;
+}
+table {
+    border-spacing: 0;
+    border-collapse: collapse;
+}
+.action{
+    position: absolute;
+    height: 2px;
+    background-color: red;
+    transform-origin: left;
+    opacity: 0.2;
+}
+.action::after {
+    content: '';
+    position: absolute;
+    right: -1px;
+    top: -4px;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 10px solid red;
+}
+.action:hover,
+.action.--active {
+    opacity: 1;
+}
+[data-state] {
+    cursor: pointer;
+}
+[data-state]:hover {
+    font-weight: bold;
+    background-color: green;
+    color: white;
+}
+[data-state].--attention {
+    font-weight: bold;
+    background-color: red;
+    color: white;
+}
