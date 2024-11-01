@@ -1,43 +1,7 @@
-const methods = {
-    define,
-    list,
-    state,
-    action,
-    ":": state,
-    "$": action,
-}
+import {micromark} from 'https://esm.sh/micromark@3?bundle'
+import {gfm, gfmHtml} from 'https://esm.sh/micromark-extension-gfm@3?bundle'
+import {math, mathHtml} from 'https://esm.sh/micromark-extension-math@3?bundle'
 
-function call(args) {
-    args = Array.from(args)
-    return methods[args.shift()]?.(args)
-}
-function list(args) {
-    return args.map(x => Array.isArray(x) ? call(x) : x)
-}
-function state(args) {
-    args = Array.from(args)
-    const label = args.shift();
-    const scope = label.split('/')[0];
-    return [scope, label, args]
-}
-function action (args) {
-    args = Array.from(args);
-    const label = args.shift();
-    const from = call(args.shift());
-    const to = call(args.shift());
-    const comment = args.join(' ');
-        
-    return { label, from, to, comment };
-}
-function define(args) {
-    args = Array.from(args);
-    const type = call(args.shift());
-    const actions = wildcard(type, list(args));
-
-    validate(type, actions);
-
-    return render(type, actions);
-}
 function wildcard(type, actions, i = 0) {
     if (i === type.length)
         return actions;
@@ -57,6 +21,46 @@ function wildcard(type, actions, i = 0) {
         return [act];
     }), ++i);
 }
+
+function or(type, actions, i = 0) {
+    if (i === type.length)
+        return actions;
+
+    return or(type, actions.flatMap(act => {
+        if (Array.isArray(act.from[i]) && act.from[i][0] === 'or') {
+            return act.from[i].slice(1).map(v => {
+                const a = {
+                    ...act, 
+                    from: [...act.from], 
+                    to: [...act.to]
+                };
+                a.from[i] = v;
+                return a;
+            })
+        }
+        return [act];
+    }), ++i);
+}
+function nor(type, actions, i = 0) {
+    if (i === type.length)
+        return actions;
+
+    return nor(type, actions.flatMap(act => {
+        if (Array.isArray(act.from[i]) && act.from[i][0] === 'nor') {
+            const ignore = act.from[i].slice(1)
+            return type[i][2].filter(v => !ignore.includes(v)).map(v => {
+                const a = {
+                    ...act, 
+                    from: [...act.from], 
+                    to: [...act.to]
+                };
+                a.from[i] = v;
+                return a;
+            })
+        }
+        return [act];
+    }), ++i);
+}
 function validate(type, actions) {
     const scopes = type.map(([scope]) => scope);
     const values = type.map(([,,values])=>values);
@@ -64,11 +68,11 @@ function validate(type, actions) {
 
     for (const act of actions) {
         if (act.from.length !== len || act.to.length !== len)
-            throw `Illegal state ${JSON.stringify(a)}`
+            throw `Illegal state ${JSON.stringify(act)}`
 
         const modified = {};
         for (let i = 0; i < len; i++) {
-            if (act.to[i] === act.from[i] || act.to[i] === '_') {
+            if (act.to[i] === act.from[i] || act.to[i] === '_' || act.to[i] === '-') {
                 act.to[i] = act.from[i];
             }
             else {
@@ -81,22 +85,28 @@ function validate(type, actions) {
             if (!values[i].includes(act.from[i]))
                 throw `'${act.from[i]}' is invaid.`
         }
-
-        //if (Object.keys(modified).length > 1)
-          //  throw `You cannot change the statuses of multiple system scopes at once: '${act.label}'`
     }
 }
-function render(type, actions) {
+
+function tree(type, actions, classPrefix) {
     const xs = [];
     const ys = [];
     let cw = 1;
     let ch = 1;
 
     for (let index = 0; index < type.length; index++) {
-        const [, label, values] = type[index];
+        const [, label, values, pos] = type[index];
         const cwl = cw * values.length;
         const chl = ch * values.length;
-        if (cwl < chl) {
+        if (pos === 'x') {
+            xs.unshift({label, values, span: cw, index});
+            cw = cwl;
+        }
+        else if(pos === 'y') {
+            ys.unshift({label, values, span: ch, index});
+            ch = chl;
+        }
+        else if (cwl < chl) {
             xs.unshift({label, values, span: cw, index});
             cw = cwl;
         }
@@ -111,7 +121,8 @@ function render(type, actions) {
             length: xs.slice(0, i).reduce((acc, {values}) => acc * values.length, 1)
         }).flatMap(() => 
             values.flatMap(v => 
-                Array.from({length}).map(_ => v))));   
+                Array.from({length}).map(_ => v))));
+    
     const ysv = ys.map(({values, span: length}, i) => 
         Array.from({
             length: ys.slice(0, i).reduce((acc, {values}) => acc * values.length, 1)
@@ -137,12 +148,10 @@ function render(type, actions) {
             }
         }
     }
-    //const cells = rows.map(row => ['tr', null, row.map(cell => ['td', null, `(${cell.join()})`])])
     const t1 = [];
 
     xs.reduce((repeat,{ values, span }) => {
         const children = []
-        //children.push(['th', { colspan: ys.length }, label])
         for (let i = 0; i < repeat; i++) {
             for (const v of values) {
                 children.push(['th', { colspan: span }, v]);
@@ -158,7 +167,15 @@ function render(type, actions) {
     ]])
     rows.forEach(row => {
         const children = row.map(cell => ['td', {'data-state':`(${cell.join()})`},
-            [...new Set(actions.filter(act => act.from.join() === cell.join()).map(({label}) => label))].join()
+            [
+                ...new Set(
+                    actions
+                        .filter(act => act.from.join() === cell.join())
+                        .map(({label}) => label)
+                )
+            ].map((label) => ['button', {
+                'class': classPrefix + 'action',
+            }, label])
         ]);
         t1.push(['tr', null, children])
     })
@@ -190,53 +207,166 @@ function render(type, actions) {
         doms.push(['tr', null, children]);
     })
 
-    doms = [['table', null, doms]]
+    doms = [['table', { 'id': classPrefix + 'table' }, doms]]
 
     for (const act of actions) {
         doms.push(['div', {
-            'class': 'action',
+            'class': classPrefix + 'arrow',
             'data-from': `(${act.from.join(',')})`,
             'data-to': `(${act.to.join(',')})`,
             'data-label': act.label,
-        }, ''])
+        }, [
+            ['span', {}, act.comment]]
+        ])
     }
 
     return doms;
 }
 
-export function parse(text = '') {
-    text = text.replace(/(?<!\\)[=|]/g, ' ');
-    text = text.replace(/\\([=|])/g, '$1')
-    text = text.replaceAll('[', '(list ');
-    text = text.replaceAll(']', ')');
-    
-    const input = Array.from(text);
-    const terminals = ['(', ')', ' ', '\t', '\r', '\n'];
-    const stack = [[]];
-    let str = '';
-    let c;
-    while((c = input.shift())) {
-        if (terminals.includes(c)) {
-            if (str.length > 0) {
-                stack.at(-1)?.push(str);
-                str = '';
-            }
-        
-            if (c == '(') {
-                stack.push([])
-            }
-            else if (c == ')') {
-                const last = stack.pop();
-                stack.at(-1).push(last);
-            }
-        }
-        else {
-            str += c;
+function parse(md, classPrefix) {
+    const html = micromark(md, {
+        extensions: [gfm(), math()],
+        htmlExtensions: [gfmHtml(), mathHtml()]
+    })
+
+    const doc = (new DOMParser()).parseFromString(html, 'text/html')
+    const type = []
+    const actions = []
+
+    let state = 'type';
+    const iter = Array.from(doc.body.children)
+    while(iter.length > 0) {
+        const el = iter.shift()
+        switch(state) {
+            case 'type':
+                if (el.nodeName === 'UL') {
+                    type.push(...Array.from(el.children).map(li => {
+                        const def = li.textContent
+                        const [lhs, rhs] = def.split('=').map(x => x.trim())
+                        const [scope, label] = lhs.split('/').map(x => x.trim())
+                        const values = rhs.split('|').map(x => x.trim())
+                        let v, axis;
+                        if (values.length > 0) {
+                            [v, axis] = values.at(-1).split('@')
+                            values[values.length - 1] = v.trim()
+                        }                                
+                        return [!label && scope, label ?? scope, values, axis]
+                    }))
+                    console.log(type)
+                    state = 'actions'
+                }
+                break;
+            case 'actions':
+                if (el.nodeName === 'H2') {
+                    actions.push({ label: el.textContent })
+                }
+                else if (el.nodeName === 'P') {
+                    const an = el.querySelector('.math annotation')
+                    if (an) {
+                        const m = an.textContent.match(/^\((.*)\)\s*\\to\s*\((.*)\)\s*$/)
+                        if (m) {
+                            const last = actions.at(-1)
+                            last.from = m[1].split(',').map(s => s.trim()).map(s => s === '\\_' ? '_' : s).map(s => {
+                                let op = 'or'
+                                if (s.startsWith('!')) {
+                                    op = 'nor'
+                                    s = s.substring(1)
+                                }
+                                return [op, ...s.split('|').map(x => x.trim())]
+                            })
+                            last.to = m[2].split(',').map(s => s.trim()).map(s => s === '\\_' ? '_' : s)
+                        }
+                    }
+                    else {
+                        const last = actions.at(-1)
+                        if (last && last.comment === undefined) {
+                            last.comment = el.textContent
+                        }
+                    }
+                }
+                break;
+            default:
+                throw 'not implemented'
         }
     }
 
-    return stack.pop();
+    const _actions = wildcard(type, nor(type, or(type, actions)))
+    validate(type, _actions)
+    return [tree(type, _actions, classPrefix), html]
 }
 
-export const run = list;
-//list(input)
+function render(parent, doms) {
+    for (const [tag, attr, children] of doms) {
+        const el = document.createElement(tag);
+        if (attr != null) {
+            for (const [key, value] of Object.entries(attr)) {
+                el.setAttribute(key, value);
+            }
+        }
+        if (Array.isArray(children)) {
+            render(el, children)
+        }
+        else {
+            el.textContent = children;
+        }
+        parent.appendChild(el);
+    }
+}
+
+function setup(classPrefix){
+    for (const div of document.querySelectorAll(`.${classPrefix}arrow`))
+    {
+        const f = document.querySelector(`[data-state="${div.dataset.from}"]`);
+        const t = document.querySelector(`[data-state="${div.dataset.to}"]`);
+        const fr = f.getBoundingClientRect();
+        const tr = t.getBoundingClientRect();
+        const fx = fr.left + fr.width / 2;
+        const fy = fr.top + fr.height / 2;
+        const tx = tr.left + tr.width / 2;
+        const ty = tr.top + tr.height / 2;
+        const dx = tx - fx;
+        const dy = ty - fy;
+        const d = Math.sqrt(Math.pow(dx, 2) + Math.pow(dy, 2));
+        const th = Math.atan2(dy, dx);
+        div.style.width = d + 'px';
+        div.style.transform = `rotate(${th}rad)`;
+        div.style.left = fx + 'px';
+        div.style.top = fy + 'px';
+    }
+
+    for (const el of document.querySelectorAll('[data-state] > button'))
+    {
+        el.addEventListener('click', function() {
+            if (this.dataset.checked !== 'true') {
+                for (const arrow of document.querySelectorAll(`[data-from="${this.parentElement.dataset.state}"][data-label="${this.textContent}"]`)){
+                    arrow.classList.add('--active');
+                    for (const act of document.querySelectorAll(`[data-state="${arrow.dataset.to}"]`)) {
+                        act.classList.add('--attention');
+                    }
+                    document.getElementById(arrow.dataset.popover)?.showPopover();
+                }
+                this.dataset.checked = 'true';
+            }
+            else {
+                for (const arrow of document.querySelectorAll(`[data-from="${this.parentElement.dataset.state}"][data-label="${this.textContent}"]`)){
+                    arrow.classList.remove('--active');
+                    for (const act of document.querySelectorAll(`[data-state="${arrow.dataset.to}"]`)) {
+                        act.classList.remove('--attention');
+                    }
+                    document.getElementById(arrow.dataset.popover)?.hidePopover();
+                }
+                this.dataset.checked = 'false';
+            }
+        })
+    }
+}
+
+export function make(parent, md, classPrefix) {
+    const [doms, html] = parse(md, classPrefix)
+    render(parent, doms);
+    setup(classPrefix)
+    
+    const doc = classPrefix + 'doc';
+    document.getElementById(doc)?.remove()
+    parent.insertAdjacentHTML('afterend', `<section id="${doc}">${html}</section>`);
+}

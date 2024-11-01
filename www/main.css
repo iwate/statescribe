@@ -15,55 +15,95 @@ html {
     color: var(--text-primary-color);
     font-family: "Helvetica Neue", "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, Arial, sans-serif;;
 }
-th, td {
+#sts-messages {
+    background: rgb(253, 200, 200);
+    color: rgb(129, 0, 0);
+}
+#sts-table th, 
+#sts-table td {
     padding: 0 0.5rem;
     margin:0;
     border: 1px solid var(--border-color);
     text-wrap: nowrap;
     height: 32px;
 }
-td:has(table) {
+#sts-table td:has(table) {
     padding: 0;
 }
-#table > tr:first-of-type > td {
-    border: none;
-    padding: 0;
-    margin: 0;
-}
-table {
+#sts-table,
+#sts-table table {
     border-spacing: 0;
     border-collapse: collapse;
 }
-.action{
+.sts-arrow {
     position: absolute;
     height: 2px;
-    background-color: red;
+    background-color: orangered;
     transform-origin: left;
-    opacity: 0.2;
+    pointer-events: none;
+    opacity: 0;
+    text-align: center;
+    box-shadow: 1px 1px 5px 1px black;
 }
-.action::after {
+.sts-arrow::before {
+    content: '';
+    position: absolute;
+    left: -1px;
+    top:-3px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: orangered;
+}
+.sts-arrow::after {
     content: '';
     position: absolute;
     right: -1px;
     top: -4px;
     border-top: 5px solid transparent;
     border-bottom: 5px solid transparent;
-    border-left: 10px solid red;
+    border-left: 10px solid orangered;
 }
-.action:hover,
-.action.--active {
+.sts-arrow > span:not(:empty) {
+    position: relative;
+    top: 0.5lh;
+    border: 1px solid orangered;
+    background-color: rgba(255, 255, 255, 0.85);
+    color: black;
+    padding: 0;
+
+    display: block;
+    margin: 0 auto;
+    width: fit-content;
+    min-width: 15em;
+    max-width: 80%;
+    font-size: xx-small;
+}
+#sts-arrows-visibility:checked ~ #sts-main .sts-arrow,
+.sts-arrow.--active {
     opacity: 1;
+}
+#sts-comments-visibility:not(:checked) ~ #sts-main .sts-arrow > span {
+    display: none;
 }
 [data-state] {
     cursor: pointer;
 }
-[data-state]:hover {
-    font-weight: bold;
-    background-color: green;
+[data-state].--attention {
+    outline: orangered;
+}
+[data-state]>button[data-checked="true"] {
+    background-color: orangered;
     color: white;
 }
-[data-state].--attention {
-    font-weight: bold;
-    background-color: red;
-    color: white;
+
+label[for="sts-arrows-visibility"],
+label[for="sts-comments-visibility"] {
+    user-select: none;
+    cursor: pointer;
+}
+
+#form textarea {
+    width: 100%;
+    font-family: monospace;
 }

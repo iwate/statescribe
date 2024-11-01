@@ -3,136 +3,113 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>STT</title>
+    <title>StateScribe</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
     <link rel="stylesheet" href="./main.css">
 </head>
 <body>
-    <h1>STT</h1>
+    <h1>StateScribe</h1>
+    <details id="sts-definition">
+        <summary>Definition</summary>
+        <form id="form">
+            <textarea name="def" rows="40" placeholder="">
+            </textarea>
+            <button type="submit">Render</button>
+        </form>
+    </details>
+    <div id="sts-messages"></div>
+    <input type="checkbox" id="sts-arrows-visibility"><label for="sts-arrows-visibility">Show/Hide Arrows</label>
+    <input type="checkbox" id="sts-comments-visibility" checked><label for="sts-comments-visibility">Show/Hide Comments</label>
+    <main id="sts-main"></main>
     <script type="module">
-        import {parse, run} from '/main.js';
+        import {make} from '/main.js';
+
+        const EXAMPLE = `# Example
+
+* EC/StateA = Start | Processing | End
+* PG/StateB = Wait | Succeeded | Failed | Canceled
+
+## Action 1
+$(Start, Wait) \\to (Processing, Wait)$
+
+This is comment.
+
+## Action 2
+$(Processing, Wait) \\to (End, \\_)$
+
+You can use underscore for keep the state value.
+
+## Action 3
+$(End, Wait) \\to (-, Succeeded)$
+
+You can use hypen same as underscore.
+
+## Action 4
+$(End, Wait) \\to (-, Failed)$
+
+## Action 5
+$(*, Wait|Succeeded) \\to (-, Canceled)$
+
+A asterisk means all cases of the state values. And a pipe means 'OR' patterns for the state values.
+
+## Action 6
+$(!End, Canceled) \\to (End, -)$
+
+A exclamation mark means 'NOR' patterns for the state values. You can use with pipes like as '!A|B|C'
+`;
+        const TAB = '    ';
+        const $main = document.getElementById('sts-main');
+        const $messages = document.getElementById('sts-messages');
+        const $def = document.getElementById('sts-definition');
+        const $editor = document.forms.form.def;
+
+        const searchParams = new URLSearchParams(location.search);
+        const defaultDef = decodeURIComponent(atob(searchParams.get('def')??''))
+        if (!defaultDef) {
+            $def.open = true;
+        }
+        $editor.value = defaultDef || EXAMPLE;
+        $editor.addEventListener('keydown', function (e) {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+
+                const start = this.selectionStart;
+                const end = this.selectionEnd;
+
+                this.value = this.value.substring(0, start) + TAB + this.value.substring(end);
+
+                this.selectionStart = this.selectionEnd = start + TAB.length;
+            }
+            else if (event.ctrlKey && event.key === 's') {
+                e.preventDefault();
+                update();
+            }
+        })
         function log(message) {
-            document.body.insertAdjacentHTML('beforeend', `<p>${message}</p>`);
+            $messages.insertAdjacentHTML('beforeend', `<p>${message}</p>`);
+        }
+        function cls() {
+            $messages.innerHTML = '';
+            $main.innerHTML = '';
+            window.scrollTo(0, 0);
         }
         window.onerror = e => {
             log(JSON.stringify(e))
         }
-        const tree = parse(`
-        (define 
-            [
-                (: EC/決済方法 
-                    | NULL
-                    | 代引き
-                    | カード
-                    | コンビニ前払)
-                (: EC/受注ステータス 
-                    | NULL
-                    | 受注
-                    | 出荷指示済
-                    | 出荷済
-                    | 着荷済
-                    | 計上済
-                    | キャンセル) 
-                (: EC/決済ステータス
-                    = NULL
-                    | 処理中
-                    | 未決済
-                    | 決済完了
-                    | 決済失敗
-                    | キャンセル)
-                (: OMS
-                    = NULL
-                    | 受注
-                    | 決済確認中
-                    | 出荷指示済
-                    | 出荷済
-                    | 着荷済
-                    | キャンセル) 
-                (: WMS
-                    = NULL
-                    | 未引当
-                    | 引当中
-                    | 引当済
-                    | 出荷済
-                    | キャンセル)
-            ]
-            ($ 受注 
-                [NULL NULL NULL NULL NULL]
-                [代引き 受注 未決済 _ _] 
-                This is a comment.)
-            ($ 受注 
-                [NULL NULL NULL NULL NULL] 
-                [カード 受注 処理中 _ _])
-            ($ 受注 
-                [NULL NULL NULL NULL NULL] 
-                [コンビニ前払 受注 未決済 _ _])
-            ($ 連携 
-                [* 受注 * NULL NULL] 
-                [_ _ _ 受注 NULL])
-            ($ 出荷指示
-                [代引き 受注 未決済 受注 NULL] 
-                [_ _ _ _ 未引当])
-        )`);
-        const [doms] = run(tree);
-        function render(parent, doms) {
-            for (const [tag, attr, children] of doms) {
-                const el = document.createElement(tag);
-                if (attr != null) {
-                    for (const [key, value] of Object.entries(attr)) {
-                        el.setAttribute(key, value);
-                    }
-                }
-                if (Array.isArray(children)) {
-                    render(el, children)
-                }
-                else {
-                    el.textContent = children;
-                }
-                parent.appendChild(el);
-            }
+        
+        function update() {
+            cls()
+            make($main, $editor.value, 'sts-')
+            searchParams.set('def', btoa(encodeURIComponent($editor.value)))
+            history.pushState(null, null, '?' + searchParams.toString());
         }
-        render(document.body, doms);
 
-        (function(){
-            for (const div of document.querySelectorAll('.action'))
-            {
-                const f = document.querySelector(`[data-state="${div.dataset.from}"]`);
-                const t = document.querySelector(`[data-state="${div.dataset.to}"]`);
-                const fr = f.getBoundingClientRect();
-                const tr = t.getBoundingClientRect();
-                const fx = fr.left + fr.width / 2;
-                const fy = fr.top + fr.height / 2;
-                const tx = tr.left + tr.width / 2;
-                const ty = tr.top + tr.height / 2;
-                const dx = tx - fx;
-                const dy = ty - fy;
-                const d = Math.sqrt(Math.pow(dx, 2) + Math.pow(dy, 2));
-                const th = Math.atan2(dy, dx);
-                div.style.width = d + 'px';
-                div.style.transform = `rotate(${th}rad)`;
-                div.style.left = fx + 'px';
-                div.style.top = fy + 'px';
-            }
+        document.forms.form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            location.search = '?def=' + btoa(encodeURIComponent($editor.value));
+        })
 
-            for (const el of document.querySelectorAll('[data-state]'))
-            {
-                el.addEventListener('pointerenter', function() {
-                    for (const act of document.querySelectorAll(`[data-from="${this.dataset.state}"]`)){
-                        act.classList.add('--active');
-                        for (const t of document.querySelectorAll(`[data-state="${act.dataset.to}"]`)) {
-                            t.classList.add('--attention');
-                        }
-                    }
-                })
-                el.addEventListener('pointerleave', function() {
-                    for (const act of document.querySelectorAll(`[data-from="${this.dataset.state}"]`)){
-                        act.classList.remove('--active');
-                        for (const t of document.querySelectorAll(`[data-state="${act.dataset.to}"]`)) {
-                            t.classList.remove('--attention');
-                        }
-                    }
-                })
-            }
-        }())
+        update();
     </script>
 </body>
 </html>
