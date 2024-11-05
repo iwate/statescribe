@@ -2,64 +2,64 @@ import {micromark} from 'https://esm.sh/micromark@3?bundle'
 import {gfm, gfmHtml} from 'https://esm.sh/micromark-extension-gfm@3?bundle'
 import {math, mathHtml} from 'https://esm.sh/micromark-extension-math@3?bundle'
 
-function wildcard(type, actions, i = 0) {
+function wildcard(type, actions, prop, i = 0) {
     if (i === type.length)
         return actions;
 
     return wildcard(type, actions.flatMap(act => {
-        if (act.from[i] === '*') {
+        if (act[prop][i] === '*') {
             return type[i][2].map(v => {
                 const a = {
                     ...act, 
                     from: [...act.from], 
                     to: [...act.to]
                 };
-                a.from[i] = v;
+                a[prop][i] = v;
                 return a;
             })
         }
         return [act];
-    }), ++i);
+    }), prop, ++i);
 }
 
-function or(type, actions, i = 0) {
+function or(type, actions, prop, i = 0) {
     if (i === type.length)
         return actions;
 
     return or(type, actions.flatMap(act => {
-        if (Array.isArray(act.from[i]) && act.from[i][0] === 'or') {
-            return act.from[i].slice(1).map(v => {
+        if (Array.isArray(act[prop][i]) && act[prop][i][0] === 'or') {
+            return act[prop][i].slice(1).map(v => {
                 const a = {
                     ...act, 
                     from: [...act.from], 
                     to: [...act.to]
                 };
-                a.from[i] = v;
+                a[prop][i] = v;
                 return a;
             })
         }
         return [act];
-    }), ++i);
+    }), prop, ++i);
 }
-function nor(type, actions, i = 0) {
+function nor(type, actions, prop, i = 0) {
     if (i === type.length)
         return actions;
 
     return nor(type, actions.flatMap(act => {
-        if (Array.isArray(act.from[i]) && act.from[i][0] === 'nor') {
-            const ignore = act.from[i].slice(1)
+        if (Array.isArray(act[prop][i]) && act[prop][i][0] === 'nor') {
+            const ignore = act[prop][i].slice(1)
             return type[i][2].filter(v => !ignore.includes(v)).map(v => {
                 const a = {
                     ...act, 
                     from: [...act.from], 
                     to: [...act.to]
                 };
-                a.from[i] = v;
+                a[prop][i] = v;
                 return a;
             })
         }
         return [act];
-    }), ++i);
+    }), prop, ++i);
 }
 function validate(type, actions) {
     const scopes = type.map(([scope]) => scope);
@@ -274,7 +274,14 @@ function parse(md, classPrefix) {
                                 }
                                 return [op, ...s.split('|').map(x => x.trim())]
                             })
-                            last.to = m[2].split(',').map(s => s.trim()).map(s => s === '\\_' ? '_' : s)
+                            last.to = m[2].split(',').map(s => s.trim()).map(s => s === '\\_' ? '_' : s).map(s => {
+                                let op = 'or'
+                                if (s.startsWith('!')) {
+                                    op = 'nor'
+                                    s = s.substring(1)
+                                }
+                                return [op, ...s.split('|').map(x => x.trim())]
+                            })
                         }
                     }
                     else {
@@ -290,9 +297,10 @@ function parse(md, classPrefix) {
         }
     }
 
-    const _actions = wildcard(type, nor(type, or(type, actions)))
-    validate(type, _actions)
-    return [tree(type, _actions, classPrefix), html]
+    const actions$1 = wildcard(type, nor(type, or(type, actions, 'from'), 'from'), 'from')
+    const actions$2 = wildcard(type, nor(type, or(type, actions$1, 'to'), 'to'), 'to')
+    validate(type, actions$2)
+    return [tree(type, actions$2, classPrefix), html]
 }
 
 function render(parent, doms) {
