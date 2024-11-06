@@ -226,11 +226,9 @@ function tree(type, actions, classPrefix) {
         ])
     }
 
-    console.log('doms')
     return doms;
 }
 
 onmessage = (e) => {
-    console.log(e)
     postMessage([tree(...e.data)]);
 };
