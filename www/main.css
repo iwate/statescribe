@@ -79,7 +79,6 @@ html {
     max-width: 80%;
     font-size: xx-small;
 }
-#sts-arrows-visibility:checked ~ #sts-main .sts-arrow,
 .sts-arrow.--active {
     opacity: 1;
 }
