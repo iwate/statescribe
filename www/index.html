@@ -23,6 +23,52 @@
     <script type="module">
         import {make} from './main.js';
 
+        async function compress(input) {
+            const encoder = new TextEncoder();
+            const inputUint8 = encoder.encode(input);
+
+            const cs = new CompressionStream("deflate");
+            const writer = cs.writable.getWriter();
+            writer.write(inputUint8);
+            writer.close();
+
+            const compressedChunks = [];
+            const reader = cs.readable.getReader();
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                compressedChunks.push(value);
+            }
+
+            const binary = new Uint8Array(compressedChunks.reduce((acc, chunk) => [...acc, ...chunk], []));
+
+            const binaryString = new Uint8Array(binary).reduce((acc, byte) => acc + String.fromCharCode(byte), '');
+
+            return btoa(binaryString).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=','');
+        }
+
+        async function decompress(compressed) {
+            const binary = new Uint8Array(atob(compressed.replaceAll('-', '+').replaceAll('_', '/')).split('').map(c => c.charCodeAt(0)));
+
+            const ds = new DecompressionStream("deflate");
+            const writer = ds.writable.getWriter();
+            writer.write(binary);
+            writer.close();
+
+            const decompressedChunks = [];
+            const reader = ds.readable.getReader();
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                decompressedChunks.push(value);
+            }
+
+            const decoder = new TextDecoder();
+            return decoder.decode(new Uint8Array(decompressedChunks.reduce((acc, chunk) => [...acc, ...chunk], [])));
+        }
+
         const EXAMPLE = `# Example
 
 * EC/StateA = Start | Processing | End
@@ -63,7 +109,8 @@ A exclamation mark means 'NOR' patterns for the state values. You can use with p
         const $editor = document.forms.form.def;
 
         const searchParams = new URLSearchParams(location.search);
-        const defaultDef = decodeURIComponent(atob(searchParams.get('def')??''))
+        let defaultDef;
+        try { defaultDef = await decompress(searchParams.get('def')??''); } catch {}
         if (!defaultDef) {
             $def.open = true;
         }
@@ -96,16 +143,16 @@ A exclamation mark means 'NOR' patterns for the state values. You can use with p
             log(JSON.stringify(e))
         }
         
-        function update() {
+        async function update() {
             cls()
             make($main, $editor.value, 'sts-')
-            searchParams.set('def', btoa(encodeURIComponent($editor.value)))
+            searchParams.set('def', await compress($editor.value));
             history.pushState(null, null, '?' + searchParams.toString());
         }
 
-        document.forms.form.addEventListener('submit', function (e) {
+        document.forms.form.addEventListener('submit', async function (e) {
             e.preventDefault();
-            location.search = '?def=' + btoa(encodeURIComponent($editor.value));
+            location.search = '?def=' + await compress($editor.value);
         })
 
         update();
