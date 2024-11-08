@@ -84,6 +84,16 @@ function validate(type, actions) {
     }
 }
 
+function* until(length) {
+    for (let i = 0; i < length; i++) {
+        yield i;
+    }
+}
+
+function range(length) {
+    return Array.from(until(length))
+}
+
 function tree(type, actions, classPrefix) {
     actions = wildcard(type, nor(type, or(type, actions, 'from'), 'from'), 'from')
     actions = wildcard(type, nor(type, or(type, actions, 'to'), 'to'), 'to')
@@ -157,7 +167,7 @@ function tree(type, actions, classPrefix) {
         const children = []
         for (let i = 0; i < repeat; i++) {
             for (const v of values) {
-                children.push(['th', { colspan: span }, v]);
+                children.push(...range(span).map(() => ['th', null, v]));
             }
         }
         t1.push(['tr', null, children])
@@ -202,13 +212,8 @@ function tree(type, actions, classPrefix) {
         ]]),
         ['tr', null, ys.map(({label}) => ['th', null, '▼' + label])]
     ]
-    ys.reduceRight((unders, { values, span }) => {
-        return values.flatMap(v => unders.map((children, i) => {
-            if (i == 0) {
-                return [['th', { rowspan: span }, v], ...children];
-            }
-            return [...children];
-        }))
+    ys.reduceRight((unders, { values }) => {
+        return values.flatMap(v => unders.map(children => [['th', null, v], ...children]))
     }, [[]]).forEach(children => {
         doms.push(['tr', null, children]);
     })
