@@ -29,7 +29,7 @@ function parse(md) {
                             [v, axis] = values.at(-1).split('@')
                             values[values.length - 1] = v.trim()
                         }                                
-                        return [!label && scope, label ?? scope, values, axis]
+                        return [label ? scope : null, label ?? scope, values, axis]
                     }))
                     state = 'actions'
                 }

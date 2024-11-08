@@ -81,7 +81,10 @@ function validate(type, actions) {
             if (!values[i].includes(act.from[i]))
                 throw `'${act.from[i]}' is invaid.`
         }
-    }
+
+        if (Object.keys(modified).length > 1)
+           throw `You cannot change the statuses of multiple system scopes at once: '${act.label}'`
+    }    
 }
 
 function* until(length) {
